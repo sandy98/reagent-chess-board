@@ -1,9 +1,15 @@
 ###Clojuresript chess board using Reagent
 
 #####Steps
-1. `lein clean`
-2. `lein cljsbuild once prod`
-3. View `resources/public/index.html` in your browser
+A. Test Mode
+  1. `rlwrap lein figwheel`
+
+B. Production mode
+  1. `lein clean`
+  2. `lein cljsbuild once prod`
+
+C. Finally
+  View `resources/public/index.html` in your browser
 
 To note: chess moves aren't verified, you can move anywhere, this is just a glorified drag'n  drop exercise (for now)
 
