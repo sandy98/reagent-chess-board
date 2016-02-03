@@ -73,13 +73,12 @@
 (defn try-move []
   (if (and (not= (:sq-from @status) (:sq-to @status)) (not= (:sq-to @status) -1)) (move) ((set-sq-to! -1) (set-sq-from! -1))))
 
-(declare on-sq-click)
 
 (defn home-did-mount []
   (js/$ (fn []
           (.droppable (js/$ "div.square") #js {:drop 
                                                (fn [evt ui] (let [target-sq (int (.attr (js/$ (-> evt .-target)) "data-id"))]
-                                                   (set-sq-to! target-sq) (try-move) (home-did-mount)))})
+                                                   (set-sq-to! target-sq) (try-move)))})
          )))
 
 (defn on-sq-click [sq-id]
@@ -88,7 +87,7 @@
       (not (:can-move? @status)) nil
       (= (:sq-from @status) -1) (if-not (nil? figure) (set-sq-from! sq-id))
       (= (:sq-from @status) sq-id) (set-sq-from! -1)
-      :else (do (set-sq-to! sq-id) (move) (home-did-mount)))))
+      :else (do (set-sq-to! sq-id) (move)))))
 
 (defn render-figure [figure sq]
   (let [src (str "img/sets/" (:figure-set @status) "/" (figures-map figure) ".png")] 
@@ -119,6 +118,7 @@
          :class "square"
          :data-figure (or ((:figures @status) sq-id) " ") 
          :data-id sq-id
+         ;:on-load #(.log js/console (str "Loaded square " sq-id))
          :on-click #(on-sq-click sq-id)
          ;:on-double-click flip!
         } (when-let [figure ((:figures @status) sq-id)] [render-figure figure sq-id])]))
@@ -153,7 +153,7 @@
     [:button {:on-click flip!} (if (:flipped @status) "Unflip board" "Flip board")][:br]
     [:button {:on-click clean-figures!} "Clear board"]
     [:button {:on-click reset-figures!} "Restore board"][:br]
-    [:button {:on-click #((flip-can-move!)(home-did-mount))} (if (:can-move? @status) "Prevent moving" "Allow moving")][:br]
+    [:button {:on-click #((flip-can-move!))} (if (:can-move? @status) "Prevent moving" "Allow moving")][:br]
     [:label {:for "cbo-sets"} "Chess set:   "][:select {:id "cbo-sets" :on-change #(set-figure-set! (-> % .-target .-value))}
      [:option {:value "default"} "Default"]
      [:option {:value "eyes"} "Eyes"]
