@@ -38,6 +38,7 @@
                 :source-paths ["src"]
                 :compiler {:output-to "resources/public/js/compiled/reagent_chess_board.js"
                            :main reagent-chess-board.core
+                           :externs ["resources/public/js/externs.js"]
                            :optimizations :advanced
                            :pretty-print false}}]}
 
