@@ -1,0 +1,197 @@
+(ns reagent-chess-board.board
+    (:require [reagent.core :as reagent] [clojure.string]))
+
+(def light-sq "#f0d9b5")
+(def bright-light-sq "#ffffdf")
+(def dark-sq "#d18b47")
+(def bright-dark-sq "#ffaf6f")
+
+(def ^:export xor56 (partial bit-xor 56))
+(def ^:export xor7 (partial bit-xor 7))
+
+(def figures-map {\P "pw" \p "p" \N "nw" \n "n" \B "bw" \b "b" \R "rw" \r "r" \Q "qw" \q "q" \K "kw" \k "k"}) 
+
+(def original-figures {8 \P 9 \P 10 \P 11 \P 12 \P 13 \P 14 \P 15 \P
+                       0 \R 7 \R 3 \Q 4 \K 1 \N 6 \N 2 \B 5 \B  
+                       48 \p  49 \p 50 \p 51 \p 52 \p 53 \p 54 \p 55 \p 
+                       56 \r 63 \r  59 \q 60 \k 57 \n 62 \n 58 \b  61 \b})
+
+(defonce  ^:export base-status (reagent/atom {
+                                     :figure-set "default" 
+                                     :sq-size 60 
+                                     :flipped false 
+                                     :can-move? true
+                                     :sq-from -1
+                                     :sq-to -1 
+                                     :figures original-figures  
+                                    }))
+
+(defn ^:export set-sq-to! [status to] (swap! status #(assoc % :sq-to to)))
+(defn ^:export set-sq-from! [status from] (swap! status #(assoc % :sq-from from)))
+(defn ^:export get-sq-to [status] (:sq-to @status))
+(defn ^:export get-sq-from [status] (:sq-from @status))
+(defn ^:export get-sq-size [status] (:sq-size @status))
+(defn ^:export set-sq-size! [status new-size] (swap! status #(assoc % :sq-size new-size)))
+(defn ^:export reset-figures! [status] (swap! status #(assoc % :figures (:figures base-status))))
+(defn ^:export clean-figures! [status] (swap! status #(assoc % :figures {})))
+(defn ^:export enlarge-10! [status] (swap! status #(assoc % :sq-size  (+ (:sq-size @status) 10))))
+(defn ^:export reduce-10! [status] (swap! status #(assoc % :sq-size  (- (:sq-size @status) 10))))
+(defn ^:export get-figure-set [status] (:figure-set @status))
+(defn ^:export set-figure-set! [status new-dir] (swap! status #(assoc % :figure-set new-dir)))
+(defn ^:export flip! [status] (swap! status #(assoc % :flipped (not (:flipped @status)))))
+(defn ^:export toggle-can-move! [status] (swap! status #(assoc % :can-move? (not (:can-move? @status)))))
+
+(defn ^:export move [status]
+  (let [;_ (.log js/console (str "Gonna move from " (:sq-from @status) " to " (:sq-to @status)))
+        figure ((:figures @status) (:sq-from @status)) 
+	new-figures (-> (:figures @status) (assoc (:sq-to @status) figure) (dissoc (:sq-from @status)))]
+    (swap! status #(assoc % :figures new-figures))
+    (swap! status #(assoc % :sq-from -1))
+    (swap! status #(assoc % :sq-to -1))))
+
+(defn ^:export mk-img [src]
+  (let [img (.createElement js/document "img")]
+    (set! (.-src img) src)
+    (set! (-> img .-style .-width) (str (int (* (:sq-size @status) 1)) "px"))
+    (set! (-> img .-style .-height) (str (int (* (:sq-size @status) 1)) "px"))
+    (set! (-> img .-style .-background) "transparent")
+    (set! (-> img .-style .-position) "absolute")
+    (set! (-> img .-id) "drag-image")
+    (set! (-> img .-draggable) true)
+    (set! (-> img .-z-index) -1000)
+    img)) 
+    
+(defn ^:export mk-pixel []
+  (let [img (.createElement js/document "img")]
+    (set! (.-src img) "img/pixel.gif")
+    img)) 
+
+
+(defn try-move [status]
+  (if (and (not= (:sq-from @status) (:sq-to @status)) (not= (:sq-to @status) -1)) (move status) ((set-sq-to! status -1) (set-sq-from! status -1))))
+
+
+(defn on-sq-click [status sq-id]
+  (let [figure ((:figures @status) sq-id)]
+    (cond
+      (not (:can-move? @status)) nil
+      (= (:sq-from @status) -1) (if-not (nil? figure) (set-sq-from! status sq-id))
+      (= (:sq-from @status) sq-id) (set-sq-from! status -1)
+      :else (do (set-sq-to! status sq-id) (try-move status)))))
+
+(defn render-figure [status figure sq]
+  (let [src (str "img/sets/" (:figure-set @status) "/" (figures-map figure) ".png")] 
+   [:img {:class "figure" :width  (str (int (* (:sq-size @status) 0.9)) "px") 
+         :height (str (int (* (:sq-size @status) 0.9)) "px") 
+         :draggable (:can-move? @status)
+         :data-where sq 
+         :style {:vertical-align "middle"
+                 :cursor (str "url('" src "')")
+                }
+         :on-load (fn [evt] 
+                    (when (:can-move? status) 
+                      (.draggable (js/$ (-> evt .-target)) 
+                                  #js {:revert true 
+                                       :revertDuration 1 
+                                       :start (fn [evt ui]
+                                                (set-sq-from! status -1)
+                                                (on-sq-click status (int (.attr (js/$ (-> evt .-target)) "data-where"))))}))) 
+         :src src}]))
+
+(defn render-sq [status color sq-id]
+  (let [background (cond
+                    (= color "w") (if (= sq-id (get-sq-from status)) bright-light-sq  light-sq)
+                    :else (if (= sq-id (get-sq-from status)) bright-dark-sq  dark-sq))]
+  [:div {:style {:float "left" :width (str (get-sq-size status) "px") :height (str (get-sq-size status)  "px") 
+                 :min-width (str (get-sq-size status)  "px") :text-align "center" :vertical-align "middle"
+                 :max-width (str (get-sq-size status) "px") :min-height (str (get-sq-size status) "px") :max-height (str (get-sq-size status) "px")
+                 :background background
+                 :cursor (if (and (:can-move? @status) ((:figures @status) sq-id)) "pointer" "default") 
+                }
+         :class "square"
+         :data-figure (or ((:figures @status) sq-id) " ") 
+         :data-id sq-id
+         :on-click #(on-sq-click status sq-id)
+         ;:on-double-click flip!
+        } (when-let [figure ((:figures @status) sq-id)] [render-figure status figure sq-id])]))
+
+(defn render-board [status]
+  (let [fxor (if (:flipped @status) xor7 xor56)]
+   [:div    
+   [:div {:style {:display "inline-block" :width (str (* 8 (get-sq-size status) ) "px") :height (str (* 8 (get-sq-size status) ) "px") 
+                  :min-width (str (* 8 (get-sq-size status) ) "px") 
+                  :max-width (str (* 8 (get-sq-size status) ) "px") :min-height (str (* 8 (get-sq-size status) ) "px") 
+                  :max-height (str (* 8 (get-sq-size status) ) "px") :border "1px solid"}}
+    [render-sq status "w" (fxor 0)] [render-sq status "b" (fxor 1)] [render-sq status "w" (fxor 2)] [render-sq status "b" (fxor 3)] 
+    [render-sq status "w" (fxor 4)] [render-sq status "b" (fxor 5)] [render-sq status "w" (fxor 6)] [render-sq status "b" (fxor 7)]
+    [render-sq status "b" (fxor 8)] [render-sq status "w" (fxor 9)] [render-sq status "b" (fxor 10)] [render-sq status "w" (fxor 11)] 
+    [render-sq status "b" (fxor 12)] [render-sq status "w" (fxor 13)] [render-sq status "b" (fxor 14)] [render-sq status "w" (fxor 15)] 
+    [render-sq status "w" (fxor 16)] [render-sq status "b" (fxor 17)] [render-sq status "w" (fxor 18)] [render-sq status "b" (fxor 19)] 
+    [render-sq status "w" (fxor 20)] [render-sq status "b" (fxor 21)] [render-sq status "w" (fxor 22)] [render-sq status "b" (fxor 23)]
+    [render-sq status "b" (fxor 24)] [render-sq status "w" (fxor 25)] [render-sq status "b" (fxor 26)] [render-sq status "w" (fxor 27)] 
+    [render-sq status "b" (fxor 28)] [render-sq status "w" (fxor 29)] [render-sq status "b" (fxor 30)] [render-sq status "w" (fxor 31)] 
+    [render-sq status "w" (fxor 32)] [render-sq status "b" (fxor 33)] [render-sq status "w" (fxor 34)] [render-sq status "b" (fxor 35)] 
+    [render-sq status "w" (fxor 36)] [render-sq status "b" (fxor 37)] [render-sq status "w" (fxor 38)] [render-sq status "b" (fxor 39)]
+    [render-sq status "b" (fxor 40)] [render-sq status "w" (fxor 41)] [render-sq status "b" (fxor 42)] [render-sq status "w" (fxor 43)] 
+    [render-sq status "b" (fxor 44)] [render-sq status "w" (fxor 45)] [render-sq status "b" (fxor 46)] [render-sq status "w" (fxor 47)] 
+    [render-sq status "w" (fxor 48)] [render-sq status "b" (fxor 49)] [render-sq status "w" (fxor 50)] [render-sq status "b" (fxor 51)] 
+    [render-sq status "w" (fxor 52)] [render-sq status "b" (fxor 53)] [render-sq status "w" (fxor 54)] [render-sq status "b" (fxor 55)]
+    [render-sq status "b" (fxor 56)] [render-sq status "w" (fxor 57)] [render-sq status "b" (fxor 58)] [render-sq status "w" (fxor 59)] 
+    [render-sq status "b" (fxor 60)] [render-sq status "w" (fxor 61)] [render-sq status "b" (fxor 62)] [render-sq status "w" (fxor 63)] 
+  ]
+  [:div {:style {:display "inline-block" :margin "1em" :padding "1em" :vertical-align "middle"}}
+    [:button {:on-click (enlarge-10! status)} "+ 10"]
+    [:button {:on-click (reduce-10! status)} "- 10"][:br]
+    [:button {:on-click (flip! status)} (if (:flipped @status) "Unflip board" "Flip board")][:br]
+    [:button {:on-click (clean-figures! status)} "Clear board"]
+    [:button {:on-click (reset-figures! status)} "Restore board"][:br]
+    [:button {:on-click #(toggle-can-move!  status)} (if (:can-move? @status) "Prevent moving" "Allow moving")][:br]
+    [:label {:for "cbo-sets"} "Chess set:   "][:select {:id "cbo-sets" :on-change #(set-figure-set! status (-> % .-target .-value))}
+     [:option {:value "default"} "Default"]
+     [:option {:value "eyes"} "Eyes"]
+     [:option {:value "modern"} "Modern"]
+     [:option {:value "fantasy"} "Fantasy"]
+     [:option {:value "spatial"} "Spatial"]
+     [:option {:value "veronika"} "Veronika"]
+     [:option {:value "alt1"} "Alt 1"]
+    ][:br]
+  ]
+  ]))
+
+
+
+;;(defn home-did-mount [this]
+;;  (.DataTable (js/$ (reagent/dom-node this))))
+
+
+
+#_(defn home-did-mount [status]
+  (js/$ (fn [status]
+         (when (:can-move? @status)
+          (.draggable (js/$ "img.figure") #js {:revert true :revertDuration 1 :start (fn [evt ui] (
+                                                (set-sq-from! status -1)
+                                                (.log js/console (str "Starting to drag from: " (-> evt .-target) 
+                                                                      " while the original data is: " (.attr (js/$ (-> evt .-target)) "data-where")))
+                                                (on-sq-click status (int (.attr (js/$ (-> evt .-target)) "data-where")))                                  
+                                                ))})
+          (.droppable (js/$ "div.square") #js {:drop 
+                                               (fn [evt ui] (let [target-sq (int (.attr (js/$ (-> evt .-target)) "data-id"))]
+                                                   (set-sq-to! status target-sq) (try-move status) (home-did-mount)))})
+         ))))
+
+
+#_(defn home-did-mount [status]
+  (js/$ (fn []
+          (.droppable (js/$ "div.square") #js {:drop 
+                                               (fn [evt ui] (let [target-sq (int (.attr (js/$ (-> evt .-target)) "data-id"))]
+                                                   (set-sq-to! status target-sq) (try-move status) (home-did-mount)))})
+         )))
+
+(defn show-board [status]
+  (reagent/create-class {:reagent-render (fn [] [render-board status])
+                         #_(:component-did-mount [home-did-mount status])}))
+                         
+;(defn ^:export main []
+;  (reagent/render [board]
+;                  (.getElementById js/document "app")))
+

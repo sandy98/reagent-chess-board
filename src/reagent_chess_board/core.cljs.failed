@@ -1,0 +1,47 @@
+(ns reagent-chess-board.core
+  (:require [reagent-chess-board.board :as board] [reagent.core :as reagent :refer [atom]] [clojure.string]))
+
+(enable-console-print!)
+
+(println "Comenzando mi nuevo excitante proyecto de tablero de ajedrez Clojurescript!")
+
+
+;; define your app data so that it doesn't get over-written on reload
+
+
+(def original-figures {8 \P 9 \P 10 \P 11 \P 12 \P 13 \P 14 \P 15 \P
+                       0 \R 7 \R 3 \Q 4 \K 1 \N 6 \N 2 \B 5 \B  
+                       48 \p  49 \p 50 \p 51 \p 52 \p 53 \p 54 \p 55 \p 
+                       56 \r 63 \r  59 \q 60 \k 57 \n 62 \n 58 \b  61 \b})
+
+
+(def app-state (atom {
+                          :text "Reagent Chess Board"
+                          :board-placeholder "Board will appear here"
+                          :figure-set "default" 
+                          :sq-size 60 
+                          :flipped false 
+                          :can-move? true
+                          :sq-from -1
+                          :sq-to -1 
+                          :figures original-figures  
+                          }))
+
+(defn title []
+  [:h1 {:style {:color "#004422"}} (:text @app-state)])
+
+(defn main-board [game-state]
+  [board/render-board game-state])
+
+(defn app []
+  [:div [title] [main-board app-state]])
+
+(reagent/render-component [app]
+                        (. js/document (getElementById "app")))
+
+
+(defn on-js-reload []
+  ;; optionally touch your app-state to force rerendering depending on
+  ;; your application
+  ;; (swap! app-state update-in [:__figwheel_counter] inc)
+)
