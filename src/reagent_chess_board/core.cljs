@@ -20,15 +20,16 @@
 (defonce  ^:export status (reagent/atom {
                                      :figure-set "default" 
                                      :sq-size 60 
-                                     :flipped false 
+                                     :flipped? false 
                                      :can-move? true
                                      :sq-from -1
                                      :sq-to -1 
                                      :figures original-figures  
                                     }))
 
-(defn set-sq-to! [to] (swap! status #(assoc % :sq-to to)))
-(defn set-sq-from! [from] (swap! status #(assoc % :sq-from from)))
+(defn ^:export set-sq-to! [to] (swap! status #(assoc % :sq-to to)))
+(defn ^:export set-sq-from! [from] (swap! status #(assoc % :sq-from from)))
+(defn ^:export get-sq-to [] (:sq-to @status))
 (defn ^:export get-sq-from [] (:sq-from @status))
 (defn ^:export get-sq-size [] (:sq-size @status))
 (defn ^:export set-sq-size! [new-size] (swap! status #(assoc % :sq-size new-size)))
@@ -36,18 +37,14 @@
 (defn ^:export clean-figures! [] (swap! status #(assoc % :figures {})))
 (defn ^:export enlarge-10! [] (swap! status #(assoc % :sq-size  (+ (:sq-size @status) 10))))
 (defn ^:export reduce-10! [] (swap! status #(assoc % :sq-size  (- (:sq-size @status) 10))))
-
-
 (defn ^:export get-figure-set [] (:figure-set @status))
 (defn ^:export set-figure-set! [new-dir] (swap! status #(assoc % :figure-set new-dir)))
+(defn ^:export flip! [] (swap! status #(assoc % :flipped? (not (:flipped? @status)))))
+(defn ^:export toggle-can-move! [] (swap! status #(assoc % :can-move? (not (:can-move? @status)))))
 
-(defn ^:export flip! [] (swap! status #(assoc % :flipped (not (:flipped @status)))))
-(defn ^:export flip-can-move! [] (swap! status #(assoc % :can-move? (not (:can-move? @status)))))
-
-(defn move []
-  (let [;_ (.log js/console (str "Gonna move from " (:sq-from @status) " to " (:sq-to @status)))
-        figure ((:figures @status) (:sq-from @status)) 
-	new-figures (-> (:figures @status) (assoc (:sq-to @status) figure) (dissoc (:sq-from @status)))]
+(defn ^:export move []
+  (let [figure ((:figures @status) (:sq-from @status)) 
+	    new-figures (-> (:figures @status) (assoc (:sq-to @status) figure) (dissoc (:sq-from @status)))]
     (swap! status #(assoc % :figures new-figures))
     (swap! status #(assoc % :sq-from -1))
     (swap! status #(assoc % :sq-to -1))))
@@ -73,14 +70,6 @@
 (defn try-move []
   (if (and (not= (:sq-from @status) (:sq-to @status)) (not= (:sq-to @status) -1)) (move) ((set-sq-to! -1) (set-sq-from! -1))))
 
-
-(defn home-did-mount []
-  (js/$ (fn []
-          (.droppable (js/$ "div.square") #js {:drop 
-                                               (fn [evt ui] (let [target-sq (int (.attr (js/$ (-> evt .-target)) "data-id"))]
-                                                   (set-sq-to! target-sq) (try-move)))})
-         )))
-
 (defn on-sq-click [sq-id]
   (let [figure ((:figures @status) sq-id)]
     (cond
@@ -91,7 +80,7 @@
 
 (defn render-figure [figure sq]
   (let [src (str "img/sets/" (:figure-set @status) "/" (figures-map figure) ".png")] 
-   [:img {:class "figure" :width  (str (int (* (:sq-size @status) 0.9)) "px") 
+   [:img.figure {:width  (str (int (* (:sq-size @status) 0.9)) "px") 
          :height (str (int (* (:sq-size @status) 0.9)) "px") 
          :draggable (:can-move? @status)
          :data-where sq 
@@ -99,33 +88,30 @@
                  :cursor (str "url('" src "')")
                 }
          :on-load (fn [evt]
-           (.draggable (js/$ (-> evt .-target)) #js {:revert true :revertDuration 1 :start (fn [evt ui] (
+           (.draggable (js/$ (-> evt .-target)) #js {:disabled (not (:can-move? @status)) :revert true :revertDuration 1 :start (fn [evt ui] 
                                                 (set-sq-from! -1)
-                                                (on-sq-click (int (.attr (js/$ (-> evt .-target)) "data-where")))                                  
-                                                ))}))
+                                                (on-sq-click sq)                                  
+                                                )}))
          :src src}]))
 
 (defn render-sq [color sq-id]
   (let [background (cond
                     (= color "w") (if (= sq-id (get-sq-from)) bright-light-sq  light-sq)
                     :else (if (= sq-id (get-sq-from)) bright-dark-sq  dark-sq))]
-  [:div {:style {:float "left" :width (str (get-sq-size) "px") :height (str (get-sq-size)  "px") 
+  [:div.square {:style {:float "left" :width (str (get-sq-size) "px") :height (str (get-sq-size)  "px") 
                  :min-width (str (get-sq-size)  "px") :text-align "center" :vertical-align "middle"
                  :max-width (str (get-sq-size)  "px") :min-height (str (get-sq-size) "px") :max-height (str (get-sq-size) "px")
                  :background background
                  :cursor (if (and (:can-move? @status) ((:figures @status) sq-id)) "pointer" "default") 
                 }
-         :class "square"
          :data-figure (or ((:figures @status) sq-id) " ") 
          :data-id sq-id
-         ;:on-load #(.log js/console (str "Loaded square " sq-id))
          :on-click #(on-sq-click sq-id)
-         ;:on-double-click flip!
         } (when-let [figure ((:figures @status) sq-id)] [render-figure figure sq-id])]))
 
 (defn render-board []
-  (let [fxor (if (:flipped @status) xor7 xor56)]
-   [:div    
+  (let [fxor (if (:flipped? @status) xor7 xor56)]
+   [:div  
    [:div {:style {:display "inline-block" :width (str (* 8 (get-sq-size) ) "px") :height (str (* 8 (get-sq-size) ) "px") 
                   :min-width (str (* 8 (get-sq-size) ) "px") 
                   :max-width (str (* 8 (get-sq-size) ) "px") :min-height (str (* 8 (get-sq-size) ) "px") 
@@ -150,10 +136,10 @@
   [:div {:style {:display "inline-block" :margin "1em" :padding "1em" :vertical-align "middle"}}
     [:button {:on-click enlarge-10!} "+ 10"]
     [:button {:on-click reduce-10!} "- 10"][:br]
-    [:button {:on-click flip!} (if (:flipped @status) "Unflip board" "Flip board")][:br]
+    [:button {:on-click flip!} (if (:flipped? @status) "Unflip board" "Flip board")][:br]
     [:button {:on-click clean-figures!} "Clear board"]
     [:button {:on-click reset-figures!} "Restore board"][:br]
-    [:button {:on-click #((flip-can-move!))} (if (:can-move? @status) "Prevent moving" "Allow moving")][:br]
+    [:button {:on-click toggle-can-move!} (if (:can-move? @status) "Prevent moving" "Allow moving")][:br]
     [:label {:for "cbo-sets"} "Chess set:   "][:select {:id "cbo-sets" :on-change #(set-figure-set! (-> % .-target .-value))}
      [:option {:value "default"} "Default"]
      [:option {:value "eyes"} "Eyes"]
@@ -166,16 +152,17 @@
   ]
   ]))
 
-
-
-;;(defn home-did-mount [this]
-;;  (.DataTable (js/$ (reagent/dom-node this))))
-
-(defn board []
-  (reagent/create-class {:reagent-render render-board
-                         :component-did-mount home-did-mount}))
+(defn board-did-mount []                    
+   (js/$ (fn []
+           (.droppable (js/$ "div.square") #js {:drop 
+              (fn [evt ui] 
+                  (let [sq-id (int (.attr (js/$ (-> evt .-target)) "data-id"))]
+                    (set-sq-to! sq-id) (try-move)))}))))
+  
+(defn show-board []
+  (reagent/create-class {:reagent-render render-board :component-did-mount board-did-mount}))  
                          
 (defn ^:export main []
-  (reagent/render [board]
+  (reagent/render [show-board]
                   (.getElementById js/document "app")))
 
