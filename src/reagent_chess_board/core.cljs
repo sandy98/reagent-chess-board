@@ -88,10 +88,10 @@
                  :cursor (str "url('" src "')")
                 }
          :on-load (fn [evt]
-           (.draggable (js/$ (-> evt .-target)) #js {:disabled (not (:can-move? @status)) :revert true :revertDuration 1 :start (fn [evt ui] 
-                                                (set-sq-from! -1)
-                                                (on-sq-click sq)                                  
-                                                )}))
+           (.draggable (js/$ (-> evt .-target)) #js {:zIndex 100 :disabled (not (:can-move? @status)) :revert true :revertDuration 1 
+                                                     :start (fn [evt ui] 
+                                                              (set-sq-from! -1)
+                                                              (on-sq-click sq)  )}))
          :src src}]))
 
 (defn render-sq [color sq-id]
