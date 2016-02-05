@@ -1,6 +1,6 @@
-(defproject reagent-chess-board "0.1.0-SNAPSHOT"
-  :description "FIXME: write this!"
-  :url "http://example.com/FIXME"
+(defproject reagent-chess-board "0.2.0-1"
+  :description "Reactive chess board via  Reagent"
+  :url "http://github.com/sandy98/reagent-chess-board"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
