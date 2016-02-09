@@ -1,5 +1,5 @@
 (ns reagent-chess-board.core
-    (:require [reagent.core :as reagent] [clojure.string]))
+    (:require [reagent.core :as reagent] [clojure.string] [chess-utils.core :as chess]))
 
 (def light-sq "#f0d9b5")
 (def bright-light-sq "#ffffdf")
@@ -8,14 +8,17 @@
 
 (def ^:export xor56 (partial bit-xor 56))
 (def ^:export xor7 (partial bit-xor 7))
+(defn ^:export fig-map [a] (apply assoc {} (flatten (filter (fn [tup] (not= \0 (second tup))) (map-indexed #(vector %1 %2) a)))))
 
-(def figures-map {\P "pw" \p "p" \N "nw" \n "n" \B "bw" \b "b" \R "rw" \r "r" \Q "qw" \q "q" \K "kw" \k "k"}) 
+(def ^:export figures-map {\P "pw" \p "p" \N "nw" \n "n" \B "bw" \b "b" \R "rw" \r "r" \Q "qw" \q "q" \K "kw" \k "k"}) 
 
-(def original-figures {8 \P 9 \P 10 \P 11 \P 12 \P 13 \P 14 \P 15 \P
+(def ^:export original-figures {8 \P 9 \P 10 \P 11 \P 12 \P 13 \P 14 \P 15 \P
                        0 \R 7 \R 3 \Q 4 \K 1 \N 6 \N 2 \B 5 \B  
                        48 \p  49 \p 50 \p 51 \p 52 \p 53 \p 54 \p 55 \p 
                        56 \r 63 \r  59 \q 60 \k 57 \n 62 \n 58 \b  61 \b})
 
+
+(def ^:export base-game (atom (chess/make-game)))
 
 (defonce  ^:export status (reagent/atom {
                                      :figure-set "default" 
@@ -23,8 +26,10 @@
                                      :flipped? false 
                                      :can-move? true
                                      :sq-from -1
-                                     :sq-to -1 
-                                     :figures original-figures  
+                                     :sq-to -1
+                                     :crowning nil
+                                     :curr-pos (dec (count (:fens @base-game)))
+                                     :figures (fig-map (:arr (nth (:fens  @base-game) 0)))
                                     }))
 
 (defn ^:export set-sq-to! [to] (swap! status #(assoc % :sq-to to)))
@@ -33,7 +38,9 @@
 (defn ^:export get-sq-from [] (:sq-from @status))
 (defn ^:export get-sq-size [] (:sq-size @status))
 (defn ^:export set-sq-size! [new-size] (swap! status #(assoc % :sq-size new-size)))
-(defn ^:export reset-figures! [] (swap! status #(assoc % :figures original-figures)))
+(defn ^:export reset-figures! [] (reset! base-game (chess/make-game)) (swap! status 
+                                                                         #(assoc % :curr-pos 0 
+                                                                                   :figures (fig-map (:arr (nth (:fens  @base-game) 0))))))
 (defn ^:export clean-figures! [] (swap! status #(assoc % :figures {})))
 (defn ^:export enlarge-10! [] (swap! status #(assoc % :sq-size  (+ (:sq-size @status) 10))))
 (defn ^:export reduce-10! [] (swap! status #(assoc % :sq-size  (- (:sq-size @status) 10))))
@@ -41,13 +48,16 @@
 (defn ^:export set-figure-set! [new-dir] (swap! status #(assoc % :figure-set new-dir)))
 (defn ^:export flip! [] (swap! status #(assoc % :flipped? (not (:flipped? @status)))))
 (defn ^:export toggle-can-move! [] (swap! status #(assoc % :can-move? (not (:can-move? @status)))))
+(defn ^:export go-to [n]
+   (swap! status #(assoc % :current-pos n :figures (fig-map (:arr (nth (:fens  @base-game) n))))))
 
 (defn ^:export move []
-  (let [figure ((:figures @status) (:sq-from @status)) 
-	    new-figures (-> (:figures @status) (assoc (:sq-to @status) figure) (dissoc (:sq-from @status)))]
-    (swap! status #(assoc % :figures new-figures))
-    (swap! status #(assoc % :sq-from -1))
-    (swap! status #(assoc % :sq-to -1))))
+    (when-let [san (chess/coords-to-san (last (:fens @base-game)) (:sq-from @status) (:sq-to @status))]
+     (when-let [new-game (chess/move @base-game san)]
+      (reset! base-game new-game)
+      (go-to (dec (count (:fens @base-game))))
+      (swap! status #(assoc % :sq-from -1))
+      (swap! status #(assoc % :sq-to -1)))))
 
 (defn ^:export mk-img [src]
   (let [img (.createElement js/document "img")]
