@@ -1,4 +1,4 @@
-(defproject reagent-chess-board "0.2.0-SNAPSHOT"
+(defproject reagent-chess-board "0.2.1-SNAPSHOT"
   :description "Reactive chess board via  Reagent"
   :url "http://github.com/sandy98/reagent-chess-board"
   :license {:name "Eclipse Public License"
