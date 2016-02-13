@@ -34,8 +34,10 @@
 
 (defn ^:export set-sq-to! [to] (swap! status #(assoc % :sq-to to)))
 (defn ^:export set-sq-from! [from] (swap! status #(assoc % :sq-from from)))
+(defn ^:export set-crowning! [figure] (swap! status #(assoc % :crowning figure)))
 (defn ^:export get-sq-to [] (:sq-to @status))
 (defn ^:export get-sq-from [] (:sq-from @status))
+(defn ^:export get-crowning [] (:crowning @status))
 (defn ^:export get-sq-size [] (:sq-size @status))
 (defn ^:export set-sq-size! [new-size] (swap! status #(assoc % :sq-size new-size)))
 (defn ^:export reset-figures! [] (reset! base-game (chess/make-game)) (swap! status 
@@ -52,12 +54,11 @@
    (swap! status #(assoc % :current-pos n :figures (fig-map (:arr (nth (:fens  @base-game) n))))))
 
 (defn ^:export move []
-    (when-let [san (chess/coords-to-san (last (:fens @base-game)) (:sq-from @status) (:sq-to @status))]
+    (when-let [san (chess/coords-to-san (last (:fens @base-game)) (:sq-from @status) (:sq-to @status) (:crowning @status))]
      (when-let [new-game (chess/move @base-game san)]
       (reset! base-game new-game)
       (go-to (dec (count (:fens @base-game))))
-      (swap! status #(assoc % :sq-from -1))
-      (swap! status #(assoc % :sq-to -1)))))
+      (swap! status #(assoc % :sq-from -1 :sq-to -1 :crowning nil)))))
 
 (defn ^:export mk-img [src]
   (let [img (.createElement js/document "img")]
@@ -78,7 +79,9 @@
 
 
 (defn try-move []
-  (if (and (not= (:sq-from @status) (:sq-to @status)) (not= (:sq-to @status) -1)) (move) ((set-sq-to! -1) (set-sq-from! -1))))
+  (if (and (not= (:sq-from @status) (:sq-to @status)) (not= (:sq-to @status) -1)) 
+        (move) 
+        ((set-crowning! nil) (set-sq-to! -1) (set-sq-from! -1))))
 
 (defn on-sq-click [sq-id]
   (let [figure ((:figures @status) sq-id)]
@@ -126,22 +129,7 @@
                   :min-width (str (* 8 (get-sq-size) ) "px") 
                   :max-width (str (* 8 (get-sq-size) ) "px") :min-height (str (* 8 (get-sq-size) ) "px") 
                   :max-height (str (* 8 (get-sq-size) ) "px") :border "1px solid"}}
-    [render-sq "w" (fxor 0)] [render-sq "b" (fxor 1)] [render-sq "w" (fxor 2)] [render-sq "b" (fxor 3)] 
-    [render-sq "w" (fxor 4)] [render-sq "b" (fxor 5)] [render-sq "w" (fxor 6)] [render-sq "b" (fxor 7)]
-    [render-sq "b" (fxor 8)] [render-sq "w" (fxor 9)] [render-sq "b" (fxor 10)] [render-sq "w" (fxor 11)] 
-    [render-sq "b" (fxor 12)] [render-sq "w" (fxor 13)] [render-sq "b" (fxor 14)] [render-sq "w" (fxor 15)] 
-    [render-sq "w" (fxor 16)] [render-sq "b" (fxor 17)] [render-sq "w" (fxor 18)] [render-sq "b" (fxor 19)] 
-    [render-sq "w" (fxor 20)] [render-sq "b" (fxor 21)] [render-sq "w" (fxor 22)] [render-sq "b" (fxor 23)]
-    [render-sq "b" (fxor 24)] [render-sq "w" (fxor 25)] [render-sq "b" (fxor 26)] [render-sq "w" (fxor 27)] 
-    [render-sq "b" (fxor 28)] [render-sq "w" (fxor 29)] [render-sq "b" (fxor 30)] [render-sq "w" (fxor 31)] 
-    [render-sq "w" (fxor 32)] [render-sq "b" (fxor 33)] [render-sq "w" (fxor 34)] [render-sq "b" (fxor 35)] 
-    [render-sq "w" (fxor 36)] [render-sq "b" (fxor 37)] [render-sq "w" (fxor 38)] [render-sq "b" (fxor 39)]
-    [render-sq "b" (fxor 40)] [render-sq "w" (fxor 41)] [render-sq "b" (fxor 42)] [render-sq "w" (fxor 43)] 
-    [render-sq "b" (fxor 44)] [render-sq "w" (fxor 45)] [render-sq "b" (fxor 46)] [render-sq "w" (fxor 47)] 
-    [render-sq "w" (fxor 48)] [render-sq "b" (fxor 49)] [render-sq "w" (fxor 50)] [render-sq "b" (fxor 51)] 
-    [render-sq "w" (fxor 52)] [render-sq "b" (fxor 53)] [render-sq "w" (fxor 54)] [render-sq "b" (fxor 55)]
-    [render-sq "b" (fxor 56)] [render-sq "w" (fxor 57)] [render-sq "b" (fxor 58)] [render-sq "w" (fxor 59)] 
-    [render-sq "b" (fxor 60)] [render-sq "w" (fxor 61)] [render-sq "b" (fxor 62)] [render-sq "w" (fxor 63)] 
+    (for [sq (map fxor (range 64))] ^{:key sq} [render-sq (second (first (filter #(= (first %) sq) chess/sq-colors))) sq])
   ]
   [:div {:style {:display "inline-block" :margin "1em" :padding "1em" :vertical-align "middle"}}
     [:button {:on-click enlarge-10!} "+ 10"]
