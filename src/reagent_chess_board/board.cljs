@@ -1,5 +1,11 @@
 (ns reagent-chess-board.board
-    (:require [reagent.core :as reagent] [clojure.string] [chess-utils.core :as chess]))
+    (:require [reagent.core :as reagent] 
+              [clojure.string]
+              [goog.dom :as dom]
+              [goog.events :as events] 
+              [chess-utils.core :as chess]
+              [cljs.core.async :refer [>! <! put! close! timeout chan]])
+    (:require-macros [cljs.core.async.macros :refer [go]]))
 
 (def light-sq "#f0d9b5")
 (def bright-light-sq "#ffffdf")
@@ -51,7 +57,10 @@
 (defn ^:export flip! [] (swap! status #(assoc % :flipped? (not (:flipped? @status)))))
 (defn ^:export toggle-can-move! [] (swap! status #(assoc % :can-move? (not (:can-move? @status)))))
 (defn ^:export go-to [n]
-   (swap! status #(assoc % :current-pos n :figures (fig-map (:arr (nth (:fens  @base-game) n))))))
+  (let [max-num (dec (count (:moves @base-game)))
+        num  (cond (neg? n) 0 (> n max-num) max-num :else n)]
+   (swap! status #(assoc % :curr-pos num :figures (fig-map (:arr (nth (:fens  @base-game) num)))))))
+(defn ^:export reset-move-vars! [] (set-crowning! nil) (set-sq-to! -1) (set-sq-from! -1)) 
 
 (defn ^:export move []
     (when-let [san (chess/coords-to-san (last (:fens @base-game)) (:sq-from @status) (:sq-to @status) (:crowning @status))]
@@ -77,11 +86,22 @@
     (set! (.-src img) "img/pixel.gif")
     img)) 
 
+(defn get-crowning-figure [sq-color crowning-color]
+  (let [resp-channel (chan)]
+    (go (>! resp-channel (clojure.string/upper-case (or (js/prompt "Choose crowning figure (Q, R, B, N)" "Q")"Q"))))
+    resp-channel))
 
 (defn try-move []
   (if (and (not= (:sq-from @status) (:sq-to @status)) (not= (:sq-to @status) -1)) 
-        (move) 
-        ((set-crowning! nil) (set-sq-to! -1) (set-sq-from! -1))))
+        (let [figure ((:figures @status) (get-sq-from))
+              crowning-color (if (= figure \P) "w" "b") 
+              sq-color (second (first (filter #(= (first %) (get-sq-to)) chess/sq-colors)))
+              row (chess/row (get-sq-to))]
+          (if (or (and (= figure \P) (= row 7)) (and (= figure \p) (= row 0)))
+            (go (set-crowning! (<! (get-crowning-figure sq-color crowning-color)))
+                (move) 
+                (reset-move-vars!))
+            ((set-crowning! nil) (move) (reset-move-vars!))))))
 
 (defn on-sq-click [sq-id]
   (let [figure ((:figures @status) sq-id)]
@@ -89,7 +109,7 @@
       (not (:can-move? @status)) nil
       (= (:sq-from @status) -1) (if-not (nil? figure) (set-sq-from! sq-id))
       (= (:sq-from @status) sq-id) (set-sq-from! -1)
-      :else (do (set-sq-to! sq-id) (move)))))
+      :else (do (set-sq-to! sq-id) (try-move)))))
 
 (defn render-figure [figure sq]
   (let [src (str "img/sets/" (:figure-set @status) "/" (figures-map figure) ".png")] 
@@ -158,5 +178,5 @@
                     (set-sq-to! sq-id) (try-move)))}))))
   
 (defn show-board []
-  (reagent/create-class {:reagent-render render-board :component-did-mount board-did-mount}))  
+  (reagent/create-class {:display-name "Reagent Chess Board" :reagent-render render-board :component-did-mount board-did-mount}))  
                          
