@@ -92,7 +92,11 @@
     resp-channel))
 
 (defn try-move []
-  (if (and (not= (:sq-from @status) (:sq-to @status)) (not= (:sq-to @status) -1)) 
+  (if (and 
+       (not= (:sq-from @status) (:sq-to @status)) 
+       (not= (:sq-to @status) -1)
+       (or (and (= "w" (:side-to-move (last (:fens @base-game)))) (#{\P\N\B\R\Q\K} ((:figures @status) (get-sq-from))))
+           (and (= "b" (:side-to-move (last (:fens @base-game)))) (#{\p\n\b\r\q\k} ((:figures @status) (get-sq-from)))))) 
         (let [figure ((:figures @status) (get-sq-from))
               crowning-color (if (= figure \P) "w" "b") 
               sq-color (second (first (filter #(= (first %) (get-sq-to)) chess/sq-colors)))
@@ -101,7 +105,7 @@
             (go (set-crowning! (<! (get-crowning-figure sq-color crowning-color)))
                 (move) 
                 (reset-move-vars!))
-            ((set-crowning! nil) (move) (reset-move-vars!))))))
+            ((set-crowning! nil) (move) (reset-move-vars!)) ))))
 
 (defn on-sq-click [sq-id]
   (let [figure ((:figures @status) sq-id)]
