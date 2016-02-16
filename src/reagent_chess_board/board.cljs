@@ -69,6 +69,10 @@
       (go-to (dec (count (:fens @base-game))))
       (swap! status #(assoc % :sq-from -1 :sq-to -1 :crowning nil)))))
 
+
+(defn ^:export get-symbol-moves []
+  (clojure.string/replace (chess/game-moves-to-string @base-game)  #"([NBRQK])" #(str (chess/unicode-map (second %)))))
+
 (defn ^:export mk-img [src]
   (let [img (.createElement js/document "img")]
     (set! (.-src img) src)
