@@ -152,21 +152,6 @@
     (for [sq (map fxor (range 64))] ^{:key sq} [render-sq (second (first (filter #(= (first %) sq) chess/sq-colors))) sq])
   ]
   [:div {:style {:display "inline-block" :margin "1em" :padding "1em" :vertical-align "middle"}}
-    [:button {:on-click enlarge-10!} "+ 10"]
-    [:button {:on-click reduce-10!} "- 10"][:br]
-    [:button {:on-click flip!} (if (:flipped? @status) "Unflip board" "Flip board")][:br]
-    [:button {:on-click clean-figures!} "Clear board"]
-    [:button {:on-click reset-figures!} "Restore board"][:br]
-    [:button {:on-click toggle-can-move!} (if (:can-move? @status) "Prevent moving" "Allow moving")][:br]
-    [:label {:for "cbo-sets"} "Chess set:   "][:select {:id "cbo-sets" :on-change #(set-figure-set! (-> % .-target .-value))}
-     [:option {:value "default"} "Default"]
-     [:option {:value "eyes"} "Eyes"]
-     [:option {:value "modern"} "Modern"]
-     [:option {:value "fantasy"} "Fantasy"]
-     [:option {:value "spatial"} "Spatial"]
-     [:option {:value "veronika"} "Veronika"]
-     [:option {:value "alt1"} "Alt 1"]
-    ][:br]
   ]
   ]))
 
