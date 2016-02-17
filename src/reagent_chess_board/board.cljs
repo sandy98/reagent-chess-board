@@ -46,28 +46,29 @@
 (defn ^:export get-crowning [] (:crowning @status))
 (defn ^:export get-sq-size [] (:sq-size @status))
 (defn ^:export set-sq-size! [new-size] (swap! status #(assoc % :sq-size new-size)))
-(defn ^:export reset-figures! [] (reset! base-game (chess/make-game)) (swap! status 
-                                                                         #(assoc % :curr-pos 0 
-                                                                                   :figures (fig-map (:arr (nth (:fens  @base-game) 0))))))
-(defn ^:export clean-figures! [] (swap! status #(assoc % :figures {})))
+(defn ^:export go-to [n]
+  (let [max-num (dec (count (:moves @base-game)))
+        num  (cond (neg? n) 0 (> n max-num) max-num :else n)]
+   (swap! status #(assoc % :curr-pos num :figures (fig-map (:arr (nth (:fens  @base-game) num)))))))
+(defn ^:export reset-figures! [] (reset! base-game (chess/make-game)) (go-to 0)) 
+(defn ^:export clean-figures! [] (reset! base-game (chess/make-game 
+                                                     {:fen chess/empty-fen-string :fens [(chess/make-fen chess/empty-fen-string)]})) 
+                                 (go-to 0)) 
 (defn ^:export enlarge-10! [] (swap! status #(assoc % :sq-size  (+ (:sq-size @status) 10))))
 (defn ^:export reduce-10! [] (swap! status #(assoc % :sq-size  (- (:sq-size @status) 10))))
 (defn ^:export get-figure-set [] (:figure-set @status))
 (defn ^:export set-figure-set! [new-dir] (swap! status #(assoc % :figure-set new-dir)))
 (defn ^:export flip! [] (swap! status #(assoc % :flipped? (not (:flipped? @status)))))
 (defn ^:export toggle-can-move! [] (swap! status #(assoc % :can-move? (not (:can-move? @status)))))
-(defn ^:export go-to [n]
-  (let [max-num (dec (count (:moves @base-game)))
-        num  (cond (neg? n) 0 (> n max-num) max-num :else n)]
-   (swap! status #(assoc % :curr-pos num :figures (fig-map (:arr (nth (:fens  @base-game) num)))))))
 (defn ^:export reset-move-vars! [] (set-crowning! nil) (set-sq-to! -1) (set-sq-from! -1)) 
 
-(defn ^:export move []
+(defn ^:export move [& cb]
     (when-let [san (chess/coords-to-san (last (:fens @base-game)) (:sq-from @status) (:sq-to @status) (:crowning @status))]
      (when-let [new-game (chess/move @base-game san)]
       (reset! base-game new-game)
       (go-to (dec (count (:fens @base-game))))
-      (swap! status #(assoc % :sq-from -1 :sq-to -1 :crowning nil)))))
+      (swap! status #(assoc % :sq-from -1 :sq-to -1 :crowning nil))
+      (when cb (apply (first cb) (rest cb))))))
 
 
 (defn ^:export get-symbol-moves []
@@ -104,12 +105,14 @@
         (let [figure ((:figures @status) (get-sq-from))
               crowning-color (if (= figure \P) "w" "b") 
               sq-color (second (first (filter #(= (first %) (get-sq-to)) chess/sq-colors)))
-              row (chess/row (get-sq-to))]
+              row (chess/row (get-sq-to))
+              chk-mate-fn #(when (chess/is-check-mate? @base-game) 
+                                         (.log js/console (str (last (:moves @base-game)) " checkmate. " (:result @base-game))))]
           (if (or (and (= figure \P) (= row 7)) (and (= figure \p) (= row 0)))
             (go (set-crowning! (<! (get-crowning-figure sq-color crowning-color)))
-                (move) 
+                (move chk-mate-fn) 
                 (reset-move-vars!))
-            ((set-crowning! nil) (move) (reset-move-vars!)) ))))
+            ((set-crowning! nil) (move chk-mate-fn) (reset-move-vars!))))))
 
 (defn on-sq-click [sq-id]
   (let [figure ((:figures @status) sq-id)]

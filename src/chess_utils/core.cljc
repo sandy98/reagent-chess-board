@@ -98,8 +98,9 @@ Fullmove number: The number of the full move. It starts at 1, and is incremented
 
 (def fen-parts [:position :side-to-move :castling :en-passant :half-move-clock :full-move-number])
 
-(def siciliana  "rnb1kbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+(def sicilian-fen-string  "rnb1kbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
 (def default-fen-string "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+(def empty-fen-string "8/8/8/8/8/8/8/8 w KQkq - 0 1")
 
 (defn fen-to-parts 
   ([] (fen-to-parts default-fen-string))
