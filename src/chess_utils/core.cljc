@@ -736,18 +736,8 @@ Fullmove number: The number of the full move. It starts at 1, and is incremented
    (map-indexed #(vector (str (inc %1) "." (first %2)) (second %2)))
    (flatten)
    (partition-all 16)
-   (map #(apply str (interpose " " %)))
-   (clojure.string/join "\n")
-   (clojure.string/trim)))
-
-(comment                           
-  (let [pmoves (partition-all 2 (rest (:moves game-obj)))
-        rang (range 1 (inc (count pmoves)))
-        str-list (map #(str %1 "." (first %2) " " (str (first (rest  %2)))) rang pmoves)
-        raw-str (apply str (interpose " " str-list))
-        ]
-    (apply str (flatten (interpose "\n" (partition-all 80 raw-str)))))
-)
+   (map #(clojure.string/trim (apply str (interpose " " %))))
+   (clojure.string/join "\n")))
 
 (defn game-tags-to-string [game-obj]
   (let [v-obj (valid-tags game-obj)
