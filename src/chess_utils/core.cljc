@@ -502,9 +502,11 @@ Fullmove number: The number of the full move. It starts at 1, and is incremented
                       (is-check? new-fen target) "+"
                       :else ""))
        ]
-         (if (nil? new-fen)
-           nil
-           (apply str [upper-figure-from extra-col-info extra-row-info col-orig capture pgn-dest (str str-crowning) chk])))))
+         (cond
+           (nil? new-fen) nil
+           (and (= upper-figure-from "K") (or (and (= from 4) (= to 6)) (and (= from 60) (= to 62)))) (str "O-O" chk)
+           (and (= upper-figure-from "K") (or (and (= from 4) (= to 2)) (and (= from 60) (= to 58)))) (str "O-O-O" chk)
+           :else (apply str [upper-figure-from extra-col-info extra-row-info col-orig capture pgn-dest (str str-crowning) chk])))))
 
 
   (move 
@@ -729,12 +731,23 @@ Fullmove number: The number of the full move. It starts at 1, and is incremented
       :else (recur kys result))))
 
 (defn game-moves-to-string [game-obj]
+  (->>
+   (partition-all 2 (rest (:moves game-obj)))
+   (map-indexed #(vector (str (inc %1) "." (first %2)) (second %2)))
+   (flatten)
+   (partition-all 16)
+   (map #(apply str (interpose " " %)))
+   (clojure.string/join "\n")
+   (clojure.string/trim)))
+
+(comment                           
   (let [pmoves (partition-all 2 (rest (:moves game-obj)))
         rang (range 1 (inc (count pmoves)))
         str-list (map #(str %1 "." (first %2) " " (str (first (rest  %2)))) rang pmoves)
         raw-str (apply str (interpose " " str-list))
         ]
-    (apply str (flatten (interpose "\n" (partition-all 80 raw-str))))))
+    (apply str (flatten (interpose "\n" (partition-all 80 raw-str)))))
+)
 
 (defn game-tags-to-string [game-obj]
   (let [v-obj (valid-tags game-obj)
