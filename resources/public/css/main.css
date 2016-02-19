@@ -4,3 +4,11 @@
   -khtml-user-select: none;
   -webkit-user-select: none;
 }
+
+table {
+    border-collapse: collapse;
+}
+
+table, th, td {
+    border: 1px solid;
+}

@@ -154,7 +154,8 @@
         } (when-let [figure ((:figures @status) sq-id)] [render-figure figure sq-id])]))
 
 (defn render-board []
-  (let [fxor (if (:flipped? @status) xor7 xor56)]
+  (let [fxor (if (:flipped? @status) xor7 xor56) 
+        move-pairs (partition-all 2 (rest (:moves @base-game)))]
    [:div  
    [:div {:style {:display "inline-block" :width (str (* 8 (get-sq-size) ) "px") :height (str (* 8 (get-sq-size) ) "px") 
                   :min-width (str (* 8 (get-sq-size) ) "px") 
@@ -162,7 +163,35 @@
                   :max-height (str (* 8 (get-sq-size) ) "px") :border "1px solid"}}
     (for [sq (map fxor (range 64))] ^{:key sq} [render-sq (second (first (filter #(= (first %) sq) chess/sq-colors))) sq])
   ]
-  [:div {:style {:display "inline-block" :margin "1em" :padding "1em" :vertical-align "middle"}}
+  [:div {:style {:display "inline-block" :margin "1em" :padding "1em"}}
+    [:table {:style {:font-size "small" :padding "1.5em"}}
+      [:thead
+        [:tr 
+          [:td [:strong " "]] [:td [:strong (:white @base-game)]] [:td [:strong (:black @base-game)]]
+        ]
+      ]
+      [:tbody {:style {:height (* 7 (get-sq-size)) :min-height (* 7 (get-sq-size)) :max-height (* 7 (get-sq-size)) :overflow "auto"}}
+        (for [r (range (count move-pairs))] 
+          (let [n1 (* 2 r) n2 (inc n1)] 
+            ^{:key n1} [:tr {:style {}} 
+                         [:td (inc r)] 
+                         [:td {:style 
+                                {:cursor "pointer"
+                                 :background (if (= (inc n1) (:curr-pos @status)) "#ccc" "inherit")}
+                              :on-click #(go-to (inc n1))} 
+                              (first (nth move-pairs r))] 
+                         [:td {:style 
+                                {:cursor "pointer"
+                                 :background (if (= (inc n2) (:curr-pos @status)) "#ccc" "inherit")}
+                               :on-click #(go-to (inc n2))} 
+                              (second (nth move-pairs r))]])) 
+      ]
+      [:tfoot
+        [:tr
+          [:td] [:td] [:td {:style {:text-align "right"}} [:strong (:result @base-game)]]
+        ]
+      ]
+    ]
   ]
   ]))
 
