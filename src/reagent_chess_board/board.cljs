@@ -46,6 +46,9 @@
 (defn ^:export get-crowning [] (:crowning @status))
 (defn ^:export get-sq-size [] (:sq-size @status))
 (defn ^:export set-sq-size! [new-size] (swap! status #(assoc % :sq-size new-size)))
+(defn ^:export get-side-to-move [] (:side-to-move (last (:fens @base-game))))
+(defn ^:export get-pgn [] (chess/to-string @base-game))
+
 (defn ^:export go-to [n]
   (let [max-num (dec (count (:moves @base-game)))
         num  (cond (neg? n) 0 (> n max-num) max-num :else n)]
@@ -70,7 +73,20 @@
       (swap! status #(assoc % :sq-from -1 :sq-to -1 :crowning nil))
       (when cb (apply (first cb) (rest cb))))))
 
+(defn ^:export remote-move! [san & cb]
+  (when-let [new-game (chess/move @base-game san)]
+    (reset! base-game new-game)
+    (go-to (dec (count (:fens @base-game))))
+    (when cb (apply (first cb) (rest cb)))))
 
+(defn ^:export take-back-move! []
+  (let [num (dec (count (:fens @base-game)))
+        new-moves (vec (take num (:moves @base-game)))
+        new-fens (vec (take num (:fens @base-game)))]
+    (swap! base-game #(assoc % :moves new-moves :fens new-fens :result "*" :ply-count (dec num)))
+    (go-to (dec num))))
+
+  
 (defn ^:export do-scroll! []
   (let [elem (.getElementById js/document "moves-body")]
     (set! (.-scrollTop  elem) (.-scrollHeight elem))))
