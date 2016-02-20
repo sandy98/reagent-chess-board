@@ -101,8 +101,9 @@
         crowning-imgs (js/$ ".crowning-img")
         board-left (.-left (.offset board))
         board-top (.-top (.offset board))
-        row (bit-xor 7 (chess/row (:sq-to @status)))
-        col (chess/col (:sq-to @status))
+        flipped? (:flipped? @status)
+        row (if flipped? (chess/row (:sq-to @status)) (bit-xor 7 (chess/row (:sq-to @status))))
+        col (if flipped? (bit-xor 7 (chess/col (:sq-to @status))) (chess/col (:sq-to @status)))
         dialog-top (+ board-top (* row (get-sq-size)))
         dialog-left (+ board-left (* col (get-sq-size)))
         ]
