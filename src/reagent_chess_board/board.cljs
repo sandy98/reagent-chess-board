@@ -24,7 +24,7 @@
                        56 \r 63 \r  59 \q 60 \k 57 \n 62 \n 58 \b  61 \b})
 
 
-(def ^:export base-game (atom (chess/make-game)))
+(defonce ^:export base-game (reagent/atom (chess/make-game)))
 
 (defonce  ^:export status (reagent/atom {
                                      :figure-set "default" 
@@ -71,6 +71,10 @@
       (when cb (apply (first cb) (rest cb))))))
 
 
+(defn ^:export do-scroll! []
+  (let [elem (.getElementById js/document "moves-body")]
+    (set! (.-scrollTop  elem) (.-scrollHeight elem))))
+
 (defn ^:export get-symbol-moves []
   (clojure.string/replace (chess/game-moves-to-string @base-game)  #"([NBRQK])" #(str (chess/unicode-map (second %)))))
 
@@ -91,9 +95,49 @@
     (set! (.-src img) "img/pixel.gif")
     img)) 
 
-(defn get-crowning-figure [sq-color crowning-color]
+(defn ^:export show-crowning-dialog [sq-color crowning-color channel]
+  (let [board (js/$ "#main-board") 
+        crowning-dialog (js/$ "#crowning-div")
+        crowning-imgs (js/$ ".crowning-img")
+        board-left (.-left (.offset board))
+        board-top (.-top (.offset board))
+        row (bit-xor 7 (chess/row (:sq-to @status)))
+        col (chess/col (:sq-to @status))
+        dialog-top (+ board-top (* row (get-sq-size)))
+        dialog-left (+ board-left (* col (get-sq-size)))
+        ]
+    (.css board "opacity" 0.4)
+    (.css crowning-dialog "background" (if (= sq-color "b") dark-sq light-sq))
+    (.css crowning-dialog "left" (str dialog-left "px"))
+    (.css crowning-dialog "top" (str dialog-top "px"))
+    (if (= crowning-color "w")
+      (do
+        (.setAttribute (.getElementById js/document "q-img") "src" (str "img/sets/" (:figure-set @status) "/qw.png")) 
+        (.setAttribute (.getElementById js/document "r-img") "src" (str "img/sets/" (:figure-set @status) "/rw.png")) 
+        (.setAttribute (.getElementById js/document "b-img") "src" (str "img/sets/" (:figure-set @status) "/bw.png")) 
+        (.setAttribute (.getElementById js/document "n-img") "src" (str "img/sets/" (:figure-set @status) "/nw.png")) 
+      )
+      (do 
+        (.setAttribute (.getElementById js/document "q-img") "src" (str "img/sets/" (:figure-set @status) "/q.png")) 
+        (.setAttribute (.getElementById js/document "r-img") "src" (str "img/sets/" (:figure-set @status) "/r.png")) 
+        (.setAttribute (.getElementById js/document "b-img") "src" (str "img/sets/" (:figure-set @status) "/b.png")) 
+        (.setAttribute (.getElementById js/document "n-img") "src" (str "img/sets/" (:figure-set @status) "/n.png")) 
+      )) 
+    (.css crowning-dialog "visibility" "visible")
+    (.on crowning-imgs "click" 
+      (fn [evt]
+        (go
+          (.off crowning-imgs "click")
+          (.css board "opacity" 1) 
+          (.css crowning-dialog "visibility" "hidden")
+          (.log js/console (.getAttribute (-> evt .-target) "data-tag"))
+          (>! channel (.getAttribute (-> evt .-target) "data-tag")))))
+    ))
+
+(defn ^:export get-crowning-figure [sq-color crowning-color]
   (let [resp-channel (chan)]
-    (go (>! resp-channel (clojure.string/upper-case (or (js/prompt "Choose crowning figure (Q, R, B, N)" "Q")"Q"))))
+    ;(go (>! resp-channel (clojure.string/upper-case (or (js/prompt "Choose crowning figure (Q, R, B, N)" "Q")"Q"))))
+    (show-crowning-dialog sq-color crowning-color resp-channel)
     resp-channel))
 
 (defn try-move []
@@ -106,13 +150,14 @@
               crowning-color (if (= figure \P) "w" "b") 
               sq-color (second (first (filter #(= (first %) (get-sq-to)) chess/sq-colors)))
               row (chess/row (get-sq-to))
-              chk-mate-fn #(when (chess/is-check-mate? @base-game) 
-                                         (.log js/console (str (last (:moves @base-game)) " checkmate. " (:result @base-game))))]
+              post-move-fn #(do (do-scroll!) 
+                             (when (chess/is-check-mate? @base-game) 
+                                (.log js/console (str (last (:moves @base-game)) " checkmate. " (:result @base-game)))))]
           (if (or (and (= figure \P) (= row 7)) (and (= figure \p) (= row 0)))
             (go (set-crowning! (<! (get-crowning-figure sq-color crowning-color)))
-                (move chk-mate-fn) 
+                (move post-move-fn) 
                 (reset-move-vars!))
-            ((set-crowning! nil) (move chk-mate-fn) (reset-move-vars!))))))
+            ((set-crowning! nil) (move post-move-fn) (reset-move-vars!))))))
 
 (defn on-sq-click [sq-id]
   (let [figure ((:figures @status) sq-id)]
@@ -121,6 +166,11 @@
       (= (:sq-from @status) -1) (if-not (nil? figure) (set-sq-from! sq-id))
       (= (:sq-from @status) sq-id) (set-sq-from! -1)
       :else (do (set-sq-to! sq-id) (try-move)))))
+
+(defn ^:export san-to-symbol [san]
+  (if san
+    (clojure.string/replace san #"[NBRQK]" #(chess/unicode-map %))
+    ""))
 
 (defn render-figure [figure sq]
   (let [src (str "img/sets/" (:figure-set @status) "/" (figures-map figure) ".png")] 
@@ -157,38 +207,94 @@
   (let [fxor (if (:flipped? @status) xor7 xor56) 
         move-pairs (partition-all 2 (rest (:moves @base-game)))]
    [:div  
-   [:div {:style {:display "inline-block" :width (str (* 8 (get-sq-size) ) "px") :height (str (* 8 (get-sq-size) ) "px") 
+   [:div#crowning-div {:style {:display "inline-block"
+                               :position "absolute" :top 0 :left 0 :border "1px solid"
+                               :width (str (* 4 (get-sq-size)) "px") :height (str (get-sq-size) "px")
+                               :min-width (str (* 4 (get-sq-size)) "px") :max-width (str (* 4 (get-sq-size)) "px")
+                               :min-height (str (get-sq-size) "px") :max-height (str (get-sq-size) "px")
+                               :z-index 5000 :background dark-sq
+                               :visibility "hidden" 
+                              }
+                       :title "Click on the desired crowning figure"}
+     [:div {:style {:width (str (get-sq-size) "px")
+                    :height (str (get-sq-size) "px")
+                    :display "inline-block"}}
+       [:img#q-img 
+         {:data-tag "Q"
+          :class "crowning-img" 
+          :width (str (* 0.9 (get-sq-size))) 
+          :height (str (* 0.9 (get-sq-size))) 
+          :src (str "img/sets/" (:figure-set @status) "/qw.png")}]
+     ]
+     [:div {:style {:width (str (get-sq-size) "px")
+                    :height (str (get-sq-size) "px")
+                    :display "inline-block"}}
+       [:img#r-img 
+         {:data-tag "R"
+          :class "crowning-img" 
+          :width (str (* 0.9 (get-sq-size))) 
+          :height (str (* 0.9 (get-sq-size))) 
+          :src (str "img/sets/" (:figure-set @status) "/rw.png")}]
+     ]
+     [:div {:style {:width (str (get-sq-size) "px")
+                    :height (str (get-sq-size) "px")
+                    :display "inline-block"}}
+       [:img#b-img 
+         {:data-tag "B"
+          :class "crowning-img" 
+          :width (str (* 0.9 (get-sq-size))) 
+          :height (str (* 0.9 (get-sq-size))) 
+          :src (str "img/sets/" (:figure-set @status) "/bw.png")}]
+     ]
+     [:div {:style {:width (str (get-sq-size) "px")
+                    :height (str (get-sq-size) "px")
+                    :display "inline-block"}}
+       [:img#n-img 
+         {:data-tag "N"
+          :class "crowning-img" 
+          :width (str (* 0.9 (get-sq-size))) 
+          :height (str (* 0.9 (get-sq-size))) 
+          :src (str "img/sets/" (:figure-set @status) "/nw.png")}]
+     ]
+   ]
+   
+   [:div#main-board {:style {:display "inline-block" :width (str (* 8 (get-sq-size) ) "px") :height (str (* 8 (get-sq-size) ) "px") 
                   :min-width (str (* 8 (get-sq-size) ) "px") 
                   :max-width (str (* 8 (get-sq-size) ) "px") :min-height (str (* 8 (get-sq-size) ) "px") 
                   :max-height (str (* 8 (get-sq-size) ) "px") :border "1px solid"}}
     (for [sq (map fxor (range 64))] ^{:key sq} [render-sq (second (first (filter #(= (first %) sq) chess/sq-colors))) sq])
-  ]
+   ]
+  
   [:div {:style {:display "inline-block" :margin "1em" :padding "1em"}}
-    [:table {:style {:font-size "small" :padding "1.5em"}}
-      [:thead
-        [:tr 
-          [:td [:strong " "]] [:td [:strong (:white @base-game)]] [:td [:strong (:black @base-game)]]
-        ]
+    [:div {:style {:font-size "small"}}
+      [:div.table-header
+        [:div [:span.numeral [:strong " "]] [:span.left-panel [:strong "Event"]] [:span.right-panel (:event @base-game)]]
+        [:div [:span.numeral [:strong " "]] [:span.left-panel [:strong "Site"]] [:span.right-panel (:site @base-game)]]
+        [:div [:span.numeral [:strong " "]] [:span.left-panel [:strong "Date"]] [:span.right-panel (:date @base-game)]]
+        [:div {:style {:border-top "1px solid #fff"}} 
+          [:span.numeral [:strong " "]] [:span.left-panel [:strong (:white @base-game)]] [:span.right-panel [:strong (:black @base-game)]]]
       ]
-      [:tbody {:style {:height (* 7 (get-sq-size)) :min-height (* 7 (get-sq-size)) :max-height (* 7 (get-sq-size)) :overflow "auto"}}
+      [:div.table-body {:id "moves-body" :style {:height (* 6 (get-sq-size)) :min-height (* 6 (get-sq-size)) 
+                  :max-height (* 6 (get-sq-size)) :overflow "auto"}}
+       (let [dstatus @status]    
         (for [r (range (count move-pairs))] 
           (let [n1 (* 2 r) n2 (inc n1)] 
-            ^{:key n1} [:tr {:style {}} 
-                         [:td (inc r)] 
-                         [:td {:style 
+            ^{:key (inc r)} [:div {:style {}} 
+                         [:span.numeral (inc r)] 
+                         [:span.left-panel {:style 
                                 {:cursor "pointer"
-                                 :background (if (= (inc n1) (:curr-pos @status)) "#ccc" "inherit")}
+                                 :background (if (= (inc n1) (:curr-pos dstatus)) "#ddd" "inherit")}
                               :on-click #(go-to (inc n1))} 
-                              (first (nth move-pairs r))] 
-                         [:td {:style 
+                              (san-to-symbol (first (nth move-pairs r)))] 
+                         [:span.right-panel {:style 
                                 {:cursor "pointer"
-                                 :background (if (= (inc n2) (:curr-pos @status)) "#ccc" "inherit")}
+                                 :background (if (= (inc n2) (:curr-pos dstatus)) "#ddd" "inherit")}
                                :on-click #(go-to (inc n2))} 
-                              (second (nth move-pairs r))]])) 
+                              (san-to-symbol (second (nth move-pairs r)))]]))) 
       ]
-      [:tfoot
-        [:tr
-          [:td] [:td] [:td {:style {:text-align "right"}} [:strong (:result @base-game)]]
+      [:div.table-footer
+        [:div
+          [:span.numeral] [:span.left-panel] [:span.right-panel [:strong (:result @base-game)]]
         ]
       ]
     ]
