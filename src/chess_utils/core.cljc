@@ -844,6 +844,7 @@ Fullmove number: The number of the full move. It starts at 1, and is incremented
 
 (defn game-to-resume [game-obj] (str (:white game-obj) " - " (:black game-obj) "\t" (:result game-obj)))
 
+(defn pair-to-string [pair]  (clojure.string/join "\n\n" pair))
 
 ;;; End of game part
 
